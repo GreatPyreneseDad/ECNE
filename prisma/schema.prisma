@@ -1,0 +1,95 @@
+// ECNE Data River Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model DataPoint {
+  id               String   @id @default(cuid())
+  externalId       String   @unique
+  source           String
+  timestamp        DateTime
+  content          Json
+  metadata         Json?
+  
+  // Coherence metrics
+  coherenceScore   Float
+  coherencePsi     Float    // Internal Consistency
+  coherenceRho     Float    // Accumulated Wisdom
+  coherenceQ       Float    // Moral Activation
+  coherenceF       Float    // Social Belonging
+  
+  relevanceReasons String[]
+  
+  createdAt        DateTime @default(now())
+  
+  @@index([timestamp])
+  @@index([source])
+  @@index([coherenceScore])
+  @@index([source, timestamp])
+}
+
+model Pattern {
+  id               String   @id @default(cuid())
+  pattern          String   @unique
+  category         String?
+  occurrences      Int      @default(1)
+  avgCoherence     Float
+  lastSeen         DateTime
+  firstSeen        DateTime @default(now())
+  
+  @@index([category])
+  @@index([avgCoherence])
+  @@index([lastSeen])
+}
+
+model Source {
+  id               String   @id @default(cuid())
+  sourceId         String   @unique
+  name             String
+  category         String?
+  totalDataPoints  Int      @default(0)
+  avgCoherence     Float    @default(0)
+  lastActive       DateTime
+  status           SourceStatus @default(ACTIVE)
+  metadata         Json?
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  @@index([status])
+  @@index([category])
+}
+
+enum SourceStatus {
+  ACTIVE
+  PAUSED
+  ERROR
+  RATE_LIMITED
+}
+
+model CoherenceSnapshot {
+  id               String   @id @default(cuid())
+  timestamp        DateTime @default(now())
+  
+  // Aggregate metrics
+  totalDataPoints  Int
+  filteredPoints   Int
+  avgCoherence     Float
+  
+  // Dimension averages
+  avgPsi           Float
+  avgRho           Float
+  avgQ             Float
+  avgF             Float
+  
+  // Top sources
+  topSources       Json
+  
+  @@index([timestamp])
+}

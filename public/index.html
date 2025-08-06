@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECNE Data River Dashboard</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0e27;
+            color: #e0e6ed;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background: #151a35;
+            padding: 20px 0;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #2a3f5f;
+        }
+        
+        h1 {
+            font-size: 2rem;
+            color: #4dc0b5;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .subtitle {
+            color: #8892b0;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: #151a35;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #2a3f5f;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        
+        .card h2 {
+            color: #4dc0b5;
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .metric {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #fff;
+            margin: 10px 0;
+        }
+        
+        .label {
+            color: #8892b0;
+            font-size: 0.9rem;
+        }
+        
+        .coherence-viz {
+            width: 100%;
+            height: 300px;
+            margin-top: 20px;
+        }
+        
+        .data-stream {
+            background: #0f1426;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .data-item {
+            background: #151a35;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-left: 4px solid #4dc0b5;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .coherence-bar {
+            height: 8px;
+            background: #2a3f5f;
+            border-radius: 4px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+        
+        .coherence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4dc0b5, #3899a0);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .dimensions {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .dimension {
+            text-align: center;
+            padding: 8px;
+            background: #0f1426;
+            border-radius: 4px;
+        }
+        
+        .dimension-label {
+            color: #8892b0;
+            font-size: 0.8rem;
+        }
+        
+        .dimension-value {
+            color: #4dc0b5;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .status.connected {
+            background: #10b981;
+            color: white;
+        }
+        
+        .status.disconnected {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .controls {
+            background: #151a35;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            color: #8892b0;
+            min-width: 120px;
+        }
+        
+        .control-group input[type="range"] {
+            flex: 1;
+            height: 6px;
+            background: #2a3f5f;
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #4dc0b5;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .control-value {
+            color: #4dc0b5;
+            font-weight: bold;
+            min-width: 50px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>
+                <span>🌊</span>
+                ECNE Data River Dashboard
+            </h1>
+            <div class="subtitle">Enhanced Coherence Network Engine - Real-time Data Stream Analysis</div>
+        </div>
+    </header>
+    
+    <div class="container">
+        <!-- Controls -->
+        <div class="controls">
+            <h2 style="color: #4dc0b5; margin-bottom: 15px;">Filter Controls</h2>
+            <div class="control-group">
+                <label>Sensitivity:</label>
+                <input type="range" id="sensitivity" min="0" max="100" value="50">
+                <span class="control-value" id="sensitivity-value">0.50</span>
+            </div>
+            <div class="control-group">
+                <label>Ψ Weight:</label>
+                <input type="range" id="psi-weight" min="0" max="100" value="25">
+                <span class="control-value" id="psi-weight-value">0.25</span>
+            </div>
+            <div class="control-group">
+                <label>ρ Weight:</label>
+                <input type="range" id="rho-weight" min="0" max="100" value="25">
+                <span class="control-value" id="rho-weight-value">0.25</span>
+            </div>
+            <div class="control-group">
+                <label>q Weight:</label>
+                <input type="range" id="q-weight" min="0" max="100" value="25">
+                <span class="control-value" id="q-weight-value">0.25</span>
+            </div>
+            <div class="control-group">
+                <label>f Weight:</label>
+                <input type="range" id="f-weight" min="0" max="100" value="25">
+                <span class="control-value" id="f-weight-value">0.25</span>
+            </div>
+        </div>
+        
+        <!-- Metrics Grid -->
+        <div class="grid">
+            <div class="card">
+                <h2>
+                    <span>📊</span>
+                    Connection Status
+                </h2>
+                <div id="connection-status" class="status disconnected">
+                    <span class="pulse"></span>
+                    Disconnected
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>
+                    <span>🎯</span>
+                    Filter Rate
+                </h2>
+                <div class="metric" id="filter-rate">0%</div>
+                <div class="label">Data points passing coherence threshold</div>
+            </div>
+            
+            <div class="card">
+                <h2>
+                    <span>💧</span>
+                    Data Flow
+                </h2>
+                <div class="metric" id="data-flow">0</div>
+                <div class="label">Points per minute</div>
+            </div>
+            
+            <div class="card">
+                <h2>
+                    <span>🔮</span>
+                    Average Coherence
+                </h2>
+                <div class="metric" id="avg-coherence">0.00</div>
+                <div class="label">Across all filtered data</div>
+            </div>
+        </div>
+        
+        <!-- Coherence Visualization -->
+        <div class="card">
+            <h2>
+                <span>📈</span>
+                Coherence Over Time
+            </h2>
+            <div id="coherence-chart" class="coherence-viz"></div>
+        </div>
+        
+        <!-- Real-time Data Stream -->
+        <div class="card">
+            <h2>
+                <span>🌊</span>
+                Live Data Stream
+            </h2>
+            <div id="data-stream" class="data-stream">
+                <div style="color: #8892b0; text-align: center; padding: 40px;">
+                    Waiting for data...
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Initialize Socket.IO connection
+        const socket = io();
+        
+        // State
+        let dataBuffer = [];
+        let stats = {
+            total: 0,
+            filtered: 0,
+            avgCoherence: 0
+        };
+        
+        // Update connection status
+        socket.on('connect', () => {
+            document.getElementById('connection-status').className = 'status connected';
+            document.getElementById('connection-status').innerHTML = '<span class="pulse"></span> Connected';
+        });
+        
+        socket.on('disconnect', () => {
+            document.getElementById('connection-status').className = 'status disconnected';
+            document.getElementById('connection-status').innerHTML = '<span class="pulse"></span> Disconnected';
+        });
+        
+        // Handle incoming data points
+        socket.on('data-point', (data) => {
+            // Update stats
+            stats.filtered++;
+            updateMetrics();
+            
+            // Add to stream display
+            addToStream(data);
+            
+            // Add to buffer for chart
+            dataBuffer.push({
+                time: new Date(data.timestamp),
+                coherence: data.coherenceScore,
+                dimensions: data.dimensions
+            });
+            
+            // Keep buffer size manageable
+            if (dataBuffer.length > 100) {
+                dataBuffer.shift();
+            }
+            
+            // Update chart
+            updateChart();
+        });
+        
+        // Add data to stream display
+        function addToStream(data) {
+            const streamEl = document.getElementById('data-stream');
+            
+            // Remove placeholder if exists
+            if (streamEl.children[0]?.style?.textAlign === 'center') {
+                streamEl.innerHTML = '';
+            }
+            
+            const itemEl = document.createElement('div');
+            itemEl.className = 'data-item';
+            itemEl.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong style="color: #4dc0b5;">${data.source}</strong>
+                        <span style="color: #8892b0; font-size: 0.8rem; margin-left: 10px;">
+                            ${new Date(data.timestamp).toLocaleTimeString()}
+                        </span>
+                    </div>
+                    <div style="font-weight: bold; color: ${getCoherenceColor(data.coherenceScore)};">
+                        ${(data.coherenceScore * 100).toFixed(1)}%
+                    </div>
+                </div>
+                <div class="coherence-bar">
+                    <div class="coherence-fill" style="width: ${data.coherenceScore * 100}%;"></div>
+                </div>
+                <div class="dimensions">
+                    <div class="dimension">
+                        <div class="dimension-label">Ψ</div>
+                        <div class="dimension-value">${data.dimensions.psi.toFixed(2)}</div>
+                    </div>
+                    <div class="dimension">
+                        <div class="dimension-label">ρ</div>
+                        <div class="dimension-value">${data.dimensions.rho.toFixed(2)}</div>
+                    </div>
+                    <div class="dimension">
+                        <div class="dimension-label">q</div>
+                        <div class="dimension-value">${data.dimensions.q.toFixed(2)}</div>
+                    </div>
+                    <div class="dimension">
+                        <div class="dimension-label">f</div>
+                        <div class="dimension-value">${data.dimensions.f.toFixed(2)}</div>
+                    </div>
+                </div>
+                ${data.reasons && data.reasons.length > 0 ? `
+                    <div style="margin-top: 8px; font-size: 0.8rem; color: #8892b0;">
+                        ${data.reasons.join(' • ')}
+                    </div>
+                ` : ''}
+            `;
+            
+            streamEl.insertBefore(itemEl, streamEl.firstChild);
+            
+            // Limit displayed items
+            while (streamEl.children.length > 10) {
+                streamEl.removeChild(streamEl.lastChild);
+            }
+        }
+        
+        // Get color based on coherence score
+        function getCoherenceColor(score) {
+            if (score > 0.8) return '#10b981';
+            if (score > 0.6) return '#4dc0b5';
+            if (score > 0.4) return '#f59e0b';
+            return '#ef4444';
+        }
+        
+        // Update metrics
+        function updateMetrics() {
+            // Filter rate
+            const filterRate = stats.total > 0 ? (stats.filtered / stats.total * 100).toFixed(1) : 0;
+            document.getElementById('filter-rate').textContent = filterRate + '%';
+            
+            // Average coherence
+            if (dataBuffer.length > 0) {
+                const avgCoherence = dataBuffer.reduce((sum, d) => sum + d.coherence, 0) / dataBuffer.length;
+                document.getElementById('avg-coherence').textContent = avgCoherence.toFixed(2);
+            }
+        }
+        
+        // Initialize D3 chart
+        const margin = { top: 20, right: 20, bottom: 30, left: 50 };
+        const chartContainer = document.getElementById('coherence-chart');
+        const width = chartContainer.offsetWidth - margin.left - margin.right;
+        const height = 300 - margin.top - margin.bottom;
+        
+        const svg = d3.select('#coherence-chart')
+            .append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom)
+            .append('g')
+            .attr('transform', `translate(${margin.left},${margin.top})`);
+        
+        // Scales
+        const xScale = d3.scaleTime().range([0, width]);
+        const yScale = d3.scaleLinear().domain([0, 1]).range([height, 0]);
+        
+        // Line generator
+        const line = d3.line()
+            .x(d => xScale(d.time))
+            .y(d => yScale(d.coherence))
+            .curve(d3.curveMonotoneX);
+        
+        // Axes
+        const xAxis = svg.append('g')
+            .attr('transform', `translate(0,${height})`)
+            .attr('class', 'axis');
+            
+        const yAxis = svg.append('g')
+            .attr('class', 'axis');
+        
+        // Line path
+        const path = svg.append('path')
+            .attr('fill', 'none')
+            .attr('stroke', '#4dc0b5')
+            .attr('stroke-width', 2);
+        
+        // Update chart
+        function updateChart() {
+            if (dataBuffer.length < 2) return;
+            
+            // Update scales
+            xScale.domain(d3.extent(dataBuffer, d => d.time));
+            
+            // Update axes
+            xAxis.call(d3.axisBottom(xScale).ticks(5).tickFormat(d3.timeFormat('%H:%M:%S')));
+            yAxis.call(d3.axisLeft(yScale).ticks(5).tickFormat(d => (d * 100) + '%'));
+            
+            // Style axes
+            svg.selectAll('.axis text').style('fill', '#8892b0');
+            svg.selectAll('.axis path, .axis line').style('stroke', '#2a3f5f');
+            
+            // Update line
+            path.datum(dataBuffer).attr('d', line);
+        }
+        
+        // Handle control changes
+        document.getElementById('sensitivity').addEventListener('input', function(e) {
+            const value = e.target.value / 100;
+            document.getElementById('sensitivity-value').textContent = value.toFixed(2);
+            
+            // Emit filter update
+            socket.emit('update-filter', { sensitivity: value });
+        });
+        
+        // Weight controls
+        ['psi', 'rho', 'q', 'f'].forEach(dimension => {
+            document.getElementById(`${dimension}-weight`).addEventListener('input', function(e) {
+                const value = e.target.value / 100;
+                document.getElementById(`${dimension}-weight-value`).textContent = value.toFixed(2);
+                
+                // Collect all weights
+                const weights = {
+                    psi: document.getElementById('psi-weight').value / 100,
+                    rho: document.getElementById('rho-weight').value / 100,
+                    q: document.getElementById('q-weight').value / 100,
+                    f: document.getElementById('f-weight').value / 100
+                };
+                
+                socket.emit('update-filter', { weights });
+            });
+        });
+        
+        // Data flow rate calculation
+        let dataFlowCount = 0;
+        setInterval(() => {
+            document.getElementById('data-flow').textContent = dataFlowCount;
+            dataFlowCount = 0;
+        }, 60000); // Reset every minute
+        
+        socket.on('data-point', () => {
+            dataFlowCount++;
+        });
+    </script>
+</body>
+</html>

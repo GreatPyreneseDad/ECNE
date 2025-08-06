@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECNE Data River - Enhanced Dashboard</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e27;
+            --bg-secondary: #151a35;
+            --bg-tertiary: #1e2444;
+            --text-primary: #e0e6ed;
+            --text-secondary: #8892b0;
+            --accent-primary: #4dc0b5;
+            --accent-secondary: #3899a0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --border: #2a3f5f;
+        }
+
+        [data-theme="light"] {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f3f4f6;
+            --bg-tertiary: #e5e7eb;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --border: #d1d5db;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            transition: background 0.3s, color 0.3s;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background: var(--bg-secondary);
+            padding: 20px 0;
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .dashboard-grid.edit-mode .card {
+            cursor: move;
+            border: 2px dashed var(--accent-primary);
+        }
+        
+        .card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card.dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: none;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .icon-btn:hover {
+            background: var(--accent-primary);
+            color: white;
+        }
+        
+        .metric {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 10px 0;
+        }
+
+        .sparkline {
+            height: 40px;
+            margin-top: 10px;
+        }
+
+        .heatmap-container {
+            height: 300px;
+            margin-top: 20px;
+            position: relative;
+        }
+
+        .network-container {
+            height: 400px;
+            margin-top: 20px;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 20px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideIn 0.3s ease-out;
+            z-index: 1000;
+        }
+
+        .toast.error {
+            border-color: var(--danger);
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .toast.success {
+            border-color: var(--success);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .theme-toggle {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .theme-toggle:hover {
+            background: var(--accent-primary);
+        }
+
+        .filter-preset {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .filter-preset.active {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .modal.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal-content {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            transform: scale(0.9);
+            transition: transform 0.3s;
+        }
+
+        .modal.active .modal-content {
+            transform: scale(1);
+        }
+
+        .tooltip {
+            position: absolute;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 0.875rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 1000;
+        }
+
+        .tooltip.visible {
+            opacity: 1;
+        }
+
+        .dimension-chart {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .dimension-item {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dimension-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent-primary);
+            transform-origin: left;
+            transition: transform 0.3s;
+        }
+
+        .flow-visualization {
+            height: 200px;
+            position: relative;
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .flow-particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--accent-primary);
+            border-radius: 50%;
+            opacity: 0.8;
+        }
+
+        @keyframes flow {
+            from {
+                transform: translateX(-100%);
+            }
+            to {
+                transform: translateX(100vw);
+            }
+        }
+
+        .keyboard-shortcuts {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 0.875rem;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .keyboard-shortcuts:hover {
+            opacity: 1;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header-content {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .modal-content {
+                padding: 20px;
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .loading-skeleton {
+            background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <h1>
+                    <span>🌊</span>
+                    ECNE Data River
+                </h1>
+                <div class="header-actions">
+                    <div class="filter-presets">
+                        <button class="filter-preset active" data-preset="default">
+                            <span>⚡</span> Default
+                        </button>
+                        <button class="filter-preset" data-preset="high-sensitivity">
+                            <span>🎯</span> High Sensitivity
+                        </button>
+                        <button class="filter-preset" data-preset="pattern-focus">
+                            <span>🔍</span> Pattern Focus
+                        </button>
+                    </div>
+                    <button class="icon-btn" id="export-btn" title="Export Data">
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                            <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                        </svg>
+                    </button>
+                    <button class="icon-btn" id="settings-btn" title="Settings">
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+                            <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
+                        </svg>
+                    </button>
+                    <button class="theme-toggle" id="theme-toggle" title="Toggle Theme">
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="dashboard-grid" id="dashboard-grid">
+            <!-- Connection Status -->
+            <div class="card" data-widget="status">
+                <div class="card-header">
+                    <h2>Connection Status</h2>
+                    <div class="card-actions">
+                        <button class="icon-btn" onclick="toggleFullscreen(this)">⛶</button>
+                    </div>
+                </div>
+                <div id="connection-status" class="status disconnected">
+                    <span class="pulse"></span>
+                    Connecting...
+                </div>
+                <div class="sparkline" id="status-sparkline"></div>
+            </div>
+            
+            <!-- Real-time Metrics -->
+            <div class="card" data-widget="metrics">
+                <div class="card-header">
+                    <h2>Live Metrics</h2>
+                    <div class="card-actions">
+                        <button class="icon-btn" onclick="toggleFullscreen(this)">⛶</button>
+                    </div>
+                </div>
+                <div class="metric" id="filter-rate">0%</div>
+                <div class="label">Filter Rate</div>
+                <div class="sparkline" id="filter-sparkline"></div>
+            </div>
+            
+            <!-- Coherence Heatmap -->
+            <div class="card" data-widget="heatmap" style="grid-column: span 2;">
+                <div class="card-header">
+                    <h2>Coherence Heatmap</h2>
+                    <div class="card-actions">
+                        <button class="icon-btn" onclick="exportHeatmap()">📊</button>
+                        <button class="icon-btn" onclick="toggleFullscreen(this)">⛶</button>
+                    </div>
+                </div>
+                <div class="heatmap-container" id="coherence-heatmap"></div>
+            </div>
+            
+            <!-- Dimension Analysis -->
+            <div class="card" data-widget="dimensions">
+                <div class="card-header">
+                    <h2>Dimension Analysis</h2>
+                    <div class="card-actions">
+                        <button class="icon-btn" onclick="toggleFullscreen(this)">⛶</button>
+                    </div>
+                </div>
+                <div class="dimension-chart" id="dimension-chart">
+                    <div class="dimension-item">
+                        <div class="dimension-label">Ψ (Internal)</div>
+                        <div class="dimension-value">0.00</div>
+                        <div class="dimension-progress" style="transform: scaleX(0)"></div>
+                    </div>
+                    <div class="dimension-item">
+                        <div class="dimension-label">ρ (Wisdom)</div>
+                        <div class="dimension-value">0.00</div>
+                        <div class="dimension-progress" style="transform: scaleX(0)"></div>
+                    </div>
+                    <div class="dimension-item">
+                        <div class="dimension-label">q (Moral)</div>
+                        <div class="dimension-value">0.00</div>
+                        <div class="dimension-progress" style="transform: scaleX(0)"></div>
+                    </div>
+                    <div class="dimension-item">
+                        <div class="dimension-label">f (Social)</div>
+                        <div class="dimension-value">0.00</div>
+                        <div class="dimension-progress" style="transform: scaleX(0)"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Data Flow Visualization -->
+            <div class="card" data-widget="flow" style="grid-column: span 2;">
+                <div class="card-header">
+                    <h2>Data River Flow</h2>
+                    <div class="card-actions">
+                        <button class="icon-btn" onclick="toggleFlowAnimation()">⏸</button>
+                        <button class="icon-btn" onclick="toggleFullscreen(this)">⛶</button>
+                    </div>
+                </div>
+                <div class="flow-visualization" id="flow-viz"></div>
+            </div>
+            
+            <!-- Pattern Network -->
+            <div class="card" data-widget="network" style="grid-column: span 2;">
+                <div class="card-header">
+                    <h2>Pattern Network</h2>
+                    <div class="card-actions">
+                        <button class="icon-btn" onclick="resetNetworkView()">🔄</button>
+                        <button class="icon-btn" onclick="toggleFullscreen(this)">⛶</button>
+                    </div>
+                </div>
+                <div class="network-container" id="pattern-network"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div class="modal" id="export-modal">
+        <div class="modal-content">
+            <h2>Export Data</h2>
+            <div class="export-options">
+                <button class="export-btn" onclick="exportCSV()">📄 Export as CSV</button>
+                <button class="export-btn" onclick="exportJSON()">📋 Export as JSON</button>
+                <button class="export-btn" onclick="generateReport()">📊 Generate PDF Report</button>
+            </div>
+            <button onclick="closeModal('export-modal')">Close</button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <h2>Settings</h2>
+            <div class="settings-section">
+                <h3>Notifications</h3>
+                <label>
+                    <input type="checkbox" id="sound-alerts"> Enable sound alerts
+                </label>
+                <label>
+                    <input type="checkbox" id="anomaly-notifications"> Show anomaly notifications
+                </label>
+            </div>
+            <div class="settings-section">
+                <h3>Performance</h3>
+                <label>
+                    Update frequency (ms):
+                    <input type="range" id="update-frequency" min="100" max="5000" value="1000">
+                </label>
+            </div>
+            <button onclick="closeModal('settings-modal')">Close</button>
+        </div>
+    </div>
+
+    <!-- Tooltip -->
+    <div class="tooltip" id="tooltip"></div>
+
+    <!-- Keyboard Shortcuts -->
+    <div class="keyboard-shortcuts">
+        <div>⌘K - Quick Search</div>
+        <div>⌘E - Export</div>
+        <div>⌘/ - Help</div>
+    </div>
+
+    <script>
+        // Initialize Socket.IO connection
+        const socket = io();
+        
+        // State management
+        const state = {
+            theme: localStorage.getItem('theme') || 'dark',
+            dataBuffer: [],
+            dimensions: { psi: 0, rho: 0, q: 0, f: 0 },
+            filterRate: 0,
+            anomalyCount: 0,
+            networkData: { nodes: [], links: [] },
+            flowAnimationActive: true,
+            soundEnabled: false
+        };
+
+        // Initialize theme
+        document.documentElement.setAttribute('data-theme', state.theme);
+
+        // Theme toggle
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            state.theme = state.theme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', state.theme);
+            localStorage.setItem('theme', state.theme);
+        });
+
+        // Socket event handlers
+        socket.on('connect', () => {
+            showToast('Connected to ECNE server', 'success');
+            updateConnectionStatus('connected');
+        });
+
+        socket.on('disconnect', () => {
+            showToast('Disconnected from server', 'error');
+            updateConnectionStatus('disconnected');
+        });
+
+        socket.on('data-point', (data) => {
+            processDataPoint(data);
+            updateVisualizations(data);
+        });
+
+        socket.on('anomaly-detected', (data) => {
+            if (state.soundEnabled) {
+                playAlert();
+            }
+            showToast(`Anomaly detected in ${data.source}`, 'warning');
+        });
+
+        // Process incoming data
+        function processDataPoint(data) {
+            state.dataBuffer.push(data);
+            if (state.dataBuffer.length > 100) {
+                state.dataBuffer.shift();
+            }
+
+            // Update dimensions
+            if (data.dimensions) {
+                Object.keys(data.dimensions).forEach(dim => {
+                    state.dimensions[dim] = data.dimensions[dim];
+                });
+                updateDimensionChart();
+            }
+
+            // Add to flow visualization
+            if (state.flowAnimationActive) {
+                addFlowParticle(data.coherenceScore);
+            }
+        }
+
+        // Update visualizations
+        function updateVisualizations(data) {
+            updateHeatmap();
+            updateNetworkGraph();
+            updateSparklines();
+        }
+
+        // Heatmap visualization
+        function updateHeatmap() {
+            const container = d3.select('#coherence-heatmap');
+            // Implementation of D3 heatmap
+            // ... (detailed implementation)
+        }
+
+        // Network graph
+        function updateNetworkGraph() {
+            const container = d3.select('#pattern-network');
+            // Implementation of force-directed graph
+            // ... (detailed implementation)
+        }
+
+        // Flow animation
+        function addFlowParticle(coherenceScore) {
+            const container = document.getElementById('flow-viz');
+            const particle = document.createElement('div');
+            particle.className = 'flow-particle';
+            particle.style.opacity = coherenceScore;
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.animation = `flow ${5 / coherenceScore}s linear`;
+            container.appendChild(particle);
+            
+            particle.addEventListener('animationend', () => {
+                particle.remove();
+            });
+        }
+
+        // Dimension chart update
+        function updateDimensionChart() {
+            const items = document.querySelectorAll('.dimension-item');
+            const dims = ['psi', 'rho', 'q', 'f'];
+            
+            items.forEach((item, i) => {
+                const value = state.dimensions[dims[i]];
+                item.querySelector('.dimension-value').textContent = value.toFixed(3);
+                item.querySelector('.dimension-progress').style.transform = `scaleX(${value})`;
+            });
+        }
+
+        // Toast notifications
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <span>${type === 'error' ? '❌' : type === 'success' ? '✅' : '⚠️'}</span>
+                <span>${message}</span>
+            `;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        // Export functions
+        function exportCSV() {
+            const csv = convertToCSV(state.dataBuffer);
+            downloadFile(csv, 'ecne-data.csv', 'text/csv');
+            closeModal('export-modal');
+        }
+
+        function exportJSON() {
+            const json = JSON.stringify(state.dataBuffer, null, 2);
+            downloadFile(json, 'ecne-data.json', 'application/json');
+            closeModal('export-modal');
+        }
+
+        function generateReport() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            doc.setFontSize(20);
+            doc.text('ECNE Data River Report', 20, 20);
+            
+            doc.setFontSize(12);
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 30);
+            doc.text(`Total Data Points: ${state.dataBuffer.length}`, 20, 40);
+            doc.text(`Filter Rate: ${state.filterRate}%`, 20, 50);
+            
+            // Add more report content...
+            
+            doc.save('ecne-report.pdf');
+            closeModal('export-modal');
+        }
+
+        // Utility functions
+        function downloadFile(content, filename, type) {
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function convertToCSV(data) {
+            if (data.length === 0) return '';
+            const headers = Object.keys(data[0]).join(',');
+            const rows = data.map(row => Object.values(row).join(','));
+            return [headers, ...rows].join('\n');
+        }
+
+        // Modal controls
+        document.getElementById('export-btn').addEventListener('click', () => {
+            openModal('export-modal');
+        });
+
+        document.getElementById('settings-btn').addEventListener('click', () => {
+            openModal('settings-modal');
+        });
+
+        function openModal(id) {
+            document.getElementById(id).classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.metaKey || e.ctrlKey) {
+                switch(e.key) {
+                    case 'k':
+                        e.preventDefault();
+                        // Open quick search
+                        break;
+                    case 'e':
+                        e.preventDefault();
+                        openModal('export-modal');
+                        break;
+                    case '/':
+                        e.preventDefault();
+                        // Show help
+                        break;
+                }
+            }
+        });
+
+        // Filter presets
+        document.querySelectorAll('.filter-preset').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.filter-preset').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                
+                const preset = e.target.dataset.preset;
+                applyFilterPreset(preset);
+            });
+        });
+
+        function applyFilterPreset(preset) {
+            const presets = {
+                'default': { sensitivity: 0.5, weights: { psi: 0.25, rho: 0.25, q: 0.25, f: 0.25 } },
+                'high-sensitivity': { sensitivity: 0.3, weights: { psi: 0.25, rho: 0.25, q: 0.25, f: 0.25 } },
+                'pattern-focus': { sensitivity: 0.5, weights: { psi: 0.2, rho: 0.4, q: 0.2, f: 0.2 } }
+            };
+            
+            if (presets[preset]) {
+                socket.emit('update-filter', presets[preset]);
+                showToast(`Applied ${preset} filter preset`, 'success');
+            }
+        }
+
+        // Drag and drop for dashboard widgets
+        let draggedElement = null;
+
+        function enableDragAndDrop() {
+            const grid = document.getElementById('dashboard-grid');
+            const cards = grid.querySelectorAll('.card');
+            
+            cards.forEach(card => {
+                card.draggable = true;
+                
+                card.addEventListener('dragstart', (e) => {
+                    draggedElement = e.target;
+                    e.target.classList.add('dragging');
+                });
+                
+                card.addEventListener('dragend', (e) => {
+                    e.target.classList.remove('dragging');
+                });
+                
+                card.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    const afterElement = getDragAfterElement(grid, e.clientY);
+                    if (afterElement == null) {
+                        grid.appendChild(draggedElement);
+                    } else {
+                        grid.insertBefore(draggedElement, afterElement);
+                    }
+                });
+            });
+        }
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.card:not(.dragging)')];
+            
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        // Initialize
+        enableDragAndDrop();
+        
+        // Connection status update
+        function updateConnectionStatus(status) {
+            const el = document.getElementById('connection-status');
+            el.className = `status ${status}`;
+            el.innerHTML = `<span class="pulse"></span> ${status === 'connected' ? 'Connected' : 'Disconnected'}`;
+        }
+
+        // Sparkline implementation
+        function updateSparklines() {
+            // Simple sparkline using canvas or SVG
+            // ... (implementation details)
+        }
+
+        // Sound alerts
+        function playAlert() {
+            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZURE');
+            audio.play();
+        }
+
+        // Initialize with mock data for demo
+        setTimeout(() => {
+            updateConnectionStatus('connected');
+            setInterval(() => {
+                const mockData = {
+                    id: Date.now(),
+                    source: ['News API', 'Social Feed', 'Finance Data'][Math.floor(Math.random() * 3)],
+                    coherenceScore: Math.random(),
+                    dimensions: {
+                        psi: Math.random(),
+                        rho: Math.random(),
+                        q: Math.random(),
+                        f: Math.random()
+                    },
+                    timestamp: new Date()
+                };
+                processDataPoint(mockData);
+            }, 2000);
+        }, 1000);
+    </script>
+</body>
+</html>
