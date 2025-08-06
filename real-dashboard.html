@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECNE Real-Time Data Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="min-h-screen p-4">
+        <!-- Header -->
+        <header class="bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+            <h1 class="text-2xl font-bold">
+                🌊 ECNE Real-Time Data Dashboard
+            </h1>
+            <p class="text-gray-400 mt-2">Monitoring real public APIs with coherence filtering</p>
+        </header>
+
+        <!-- API Status -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-gray-800 rounded-lg shadow p-6">
+                <div class="text-sm font-medium text-gray-400">Hacker News</div>
+                <div class="mt-2 text-2xl font-bold text-green-400" id="hnStatus">🟢 Active</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg shadow p-6">
+                <div class="text-sm font-medium text-gray-400">Reddit Tech</div>
+                <div class="mt-2 text-2xl font-bold text-green-400" id="redditStatus">🟢 Active</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg shadow p-6">
+                <div class="text-sm font-medium text-gray-400">Data Points</div>
+                <div class="mt-2 text-3xl font-bold" id="totalPoints">0</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg shadow p-6">
+                <div class="text-sm font-medium text-gray-400">Avg Coherence</div>
+                <div class="mt-2 text-3xl font-bold" id="avgCoherence">0.000</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Live Feed -->
+            <div class="bg-gray-800 rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4">🔥 High-Coherence Content</h2>
+                <div id="liveFeed" class="space-y-4 max-h-96 overflow-y-auto">
+                    <!-- Content will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Coherence Distribution -->
+            <div class="bg-gray-800 rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4">📊 Coherence Distribution</h2>
+                <canvas id="coherenceChart" height="300"></canvas>
+            </div>
+
+            <!-- Source Performance -->
+            <div class="bg-gray-800 rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4">📈 Source Performance</h2>
+                <canvas id="sourceChart" height="300"></canvas>
+            </div>
+
+            <!-- Top Stories -->
+            <div class="bg-gray-800 rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4">🏆 Top Stories by Coherence</h2>
+                <div id="topStories" class="space-y-3">
+                    <!-- Top stories will be inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="mt-8 text-center text-sm text-gray-500">
+            ECNE Data River - Real API Integration Demo
+        </footer>
+    </div>
+
+    <script>
+        // Initialize charts
+        const coherenceCtx = document.getElementById('coherenceChart').getContext('2d');
+        const coherenceChart = new Chart(coherenceCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Coherence Score',
+                    data: [],
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 1
+                    }
+                }
+            }
+        });
+
+        const sourceCtx = document.getElementById('sourceChart').getContext('2d');
+        const sourceChart = new Chart(sourceCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Hacker News', 'Reddit Tech'],
+                datasets: [{
+                    label: 'Items Processed',
+                    data: [0, 0],
+                    backgroundColor: ['rgba(255, 99, 132, 0.5)', 'rgba(54, 162, 235, 0.5)']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+
+        // Data storage
+        let allData = [];
+        let hnCount = 0;
+        let redditCount = 0;
+
+        // Fetch data from APIs
+        async function fetchHackerNews() {
+            try {
+                const topStoriesRes = await axios.get('https://hacker-news.firebaseio.com/v0/topstories.json');
+                const storyIds = topStoriesRes.data.slice(0, 10);
+                
+                for (const id of storyIds) {
+                    const storyRes = await axios.get(`https://hacker-news.firebaseio.com/v0/item/${id}.json`);
+                    const story = storyRes.data;
+                    
+                    if (story && story.title) {
+                        const coherenceScore = calculateCoherence(story);
+                        
+                        allData.push({
+                            source: 'Hacker News',
+                            title: story.title,
+                            url: story.url || `https://news.ycombinator.com/item?id=${story.id}`,
+                            score: story.score,
+                            comments: story.descendants || 0,
+                            coherenceScore,
+                            timestamp: new Date()
+                        });
+                        
+                        hnCount++;
+                    }
+                }
+                
+                updateDashboard();
+            } catch (error) {
+                console.error('HN fetch error:', error);
+                document.getElementById('hnStatus').textContent = '🔴 Error';
+                document.getElementById('hnStatus').className = 'mt-2 text-2xl font-bold text-red-400';
+            }
+        }
+
+        async function fetchReddit() {
+            try {
+                const response = await axios.get('https://www.reddit.com/r/technology/hot.json?limit=10', {
+                    headers: { 'User-Agent': 'ECNE-Dashboard/1.0' }
+                });
+                
+                const posts = response.data.data.children;
+                
+                for (const post of posts) {
+                    const data = post.data;
+                    const coherenceScore = calculateCoherence(data);
+                    
+                    allData.push({
+                        source: 'Reddit Tech',
+                        title: data.title,
+                        url: data.url,
+                        score: data.ups,
+                        comments: data.num_comments,
+                        coherenceScore,
+                        timestamp: new Date()
+                    });
+                    
+                    redditCount++;
+                }
+                
+                updateDashboard();
+            } catch (error) {
+                console.error('Reddit fetch error:', error);
+                document.getElementById('redditStatus').textContent = '🔴 Error';
+                document.getElementById('redditStatus').className = 'mt-2 text-2xl font-bold text-red-400';
+            }
+        }
+
+        function calculateCoherence(data) {
+            let score = 0;
+            
+            if (data.title || data.name) score += 0.25;
+            if (data.url || data.link) score += 0.25;
+            if (data.score > 100 || data.ups > 100) score += 0.25;
+            if (data.descendants > 50 || data.num_comments > 50) score += 0.25;
+            
+            return Math.min(score + Math.random() * 0.2, 1.0);
+        }
+
+        function updateDashboard() {
+            // Update stats
+            document.getElementById('totalPoints').textContent = allData.length;
+            
+            const avgCoherence = allData.reduce((sum, d) => sum + d.coherenceScore, 0) / allData.length || 0;
+            document.getElementById('avgCoherence').textContent = avgCoherence.toFixed(3);
+            
+            // Update source chart
+            sourceChart.data.datasets[0].data = [hnCount, redditCount];
+            sourceChart.update();
+            
+            // Update coherence chart
+            const recent = allData.slice(-20);
+            coherenceChart.data.labels = recent.map((_, i) => i + 1);
+            coherenceChart.data.datasets[0].data = recent.map(d => d.coherenceScore);
+            coherenceChart.update();
+            
+            // Update live feed (high coherence only)
+            const highCoherence = allData.filter(d => d.coherenceScore >= 0.7).slice(-5);
+            const feedHtml = highCoherence.map(item => `
+                <div class="bg-gray-700 p-3 rounded">
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="text-xs text-gray-400">${item.source}</span>
+                        <span class="text-xs bg-blue-600 px-2 py-1 rounded">${item.coherenceScore.toFixed(3)}</span>
+                    </div>
+                    <h3 class="font-medium mb-1">${item.title}</h3>
+                    <div class="text-xs text-gray-400">
+                        📊 ${item.score} points | 💬 ${item.comments} comments
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('liveFeed').innerHTML = feedHtml || '<p class="text-gray-500">Loading data...</p>';
+            
+            // Update top stories
+            const topStories = [...allData].sort((a, b) => b.coherenceScore - a.coherenceScore).slice(0, 5);
+            const topHtml = topStories.map((item, i) => `
+                <div class="flex items-start space-x-3">
+                    <span class="text-2xl font-bold text-gray-600">${i + 1}</span>
+                    <div class="flex-1">
+                        <a href="${item.url}" target="_blank" class="text-blue-400 hover:underline">
+                            ${item.title}
+                        </a>
+                        <div class="text-xs text-gray-500 mt-1">
+                            ${item.source} • Score: ${item.coherenceScore.toFixed(3)}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('topStories').innerHTML = topHtml || '<p class="text-gray-500">No data yet...</p>';
+        }
+
+        // Initial fetch and refresh
+        async function refreshData() {
+            await Promise.all([fetchHackerNews(), fetchReddit()]);
+        }
+
+        // Start dashboard
+        refreshData();
+        setInterval(refreshData, 60000); // Refresh every minute
+    </script>
+</body>
+</html>

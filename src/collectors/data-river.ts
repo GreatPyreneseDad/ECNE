@@ -55,10 +55,12 @@ export class DataRiverCollector extends EventEmitter {
       intervalCap: config.maxConcurrent || 10
     });
 
-    // Initialize sources
-    config.sources.forEach(source => {
-      this.addSource(source);
-    });
+    // Initialize sources if provided
+    if (config.sources) {
+      config.sources.forEach(source => {
+        this.addSource(source);
+      });
+    }
   }
 
   /**

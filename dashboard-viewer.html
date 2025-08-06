@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECNE Data River Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900">
+    <div class="min-h-screen p-4">
+        <!-- Header -->
+        <header class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                        🌊 ECNE Data River Dashboard
+                    </h1>
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                        <span class="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
+                        Live
+                    </span>
+                </div>
+                <button onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <span id="themeIcon">🌙</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Processed</div>
+                <div class="mt-2 text-3xl font-bold text-gray-900 dark:text-white" id="totalProcessed">0</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Filter Rate</div>
+                <div class="mt-2 text-3xl font-bold text-gray-900 dark:text-white" id="filterRate">0%</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Avg Coherence</div>
+                <div class="mt-2 text-3xl font-bold text-gray-900 dark:text-white" id="avgCoherence">0.000</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Processing Rate</div>
+                <div class="mt-2 text-3xl font-bold text-gray-900 dark:text-white" id="processingRate">0/s</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Coherence Chart -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                    Coherence Score Timeline
+                </h2>
+                <canvas id="coherenceChart" height="300"></canvas>
+            </div>
+
+            <!-- System Health -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                    System Health
+                </h2>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">CPU Usage</span>
+                        <div class="flex items-center">
+                            <div class="w-32 bg-gray-200 rounded-full h-2 mr-2">
+                                <div class="bg-green-500 h-2 rounded-full" style="width: 35%"></div>
+                            </div>
+                            <span class="text-sm">35%</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">Memory</span>
+                        <div class="flex items-center">
+                            <div class="w-32 bg-gray-200 rounded-full h-2 mr-2">
+                                <div class="bg-green-500 h-2 rounded-full" style="width: 54%"></div>
+                            </div>
+                            <span class="text-sm">54MB</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">Error Rate</span>
+                        <div class="flex items-center">
+                            <div class="w-32 bg-gray-200 rounded-full h-2 mr-2">
+                                <div class="bg-green-500 h-2 rounded-full" style="width: 1%"></div>
+                            </div>
+                            <span class="text-sm">0.1%</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">Active Sources</span>
+                        <span class="text-lg font-semibold text-green-600">3/3</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Data Points -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                    Recent High-Coherence Data
+                </h2>
+                <div class="overflow-y-auto max-h-64">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead>
+                            <tr>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Score</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTable" class="divide-y divide-gray-200 dark:divide-gray-700">
+                            <!-- Data rows will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Dimension Analysis -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                    Coherence Dimensions
+                </h2>
+                <canvas id="dimensionChart" height="300"></canvas>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
+            ECNE Data River © 2024 | Grounded Coherence Theory Implementation
+        </footer>
+    </div>
+
+    <script>
+        // Initialize charts
+        const coherenceCtx = document.getElementById('coherenceChart').getContext('2d');
+        const coherenceChart = new Chart(coherenceCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Coherence Score',
+                    data: [],
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 1
+                    }
+                }
+            }
+        });
+
+        const dimensionCtx = document.getElementById('dimensionChart').getContext('2d');
+        const dimensionChart = new Chart(dimensionCtx, {
+            type: 'radar',
+            data: {
+                labels: ['Ψ (Internal)', 'ρ (Wisdom)', 'q (Moral)', 'f (Social)'],
+                datasets: [{
+                    label: 'Current',
+                    data: [0.8, 0.7, 0.6, 0.75],
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        beginAtZero: true,
+                        max: 1
+                    }
+                }
+            }
+        });
+
+        // Simulate real-time updates
+        let processed = 160;
+        let filtered = 84;
+        let dataPoints = [];
+
+        function updateDashboard() {
+            // Update stats
+            processed += Math.floor(Math.random() * 10) + 5;
+            filtered += Math.floor(Math.random() * 5) + 2;
+            
+            document.getElementById('totalProcessed').textContent = processed.toLocaleString();
+            document.getElementById('filterRate').textContent = ((filtered / processed) * 100).toFixed(1) + '%';
+            document.getElementById('avgCoherence').textContent = (0.65 + Math.random() * 0.1).toFixed(3);
+            document.getElementById('processingRate').textContent = (5 + Math.random() * 5).toFixed(1) + '/s';
+
+            // Update coherence chart
+            const now = new Date().toLocaleTimeString();
+            coherenceChart.data.labels.push(now);
+            coherenceChart.data.datasets[0].data.push(0.5 + Math.random() * 0.5);
+            
+            if (coherenceChart.data.labels.length > 20) {
+                coherenceChart.data.labels.shift();
+                coherenceChart.data.datasets[0].data.shift();
+            }
+            coherenceChart.update();
+
+            // Update dimension chart
+            dimensionChart.data.datasets[0].data = [
+                0.7 + Math.random() * 0.3,
+                0.6 + Math.random() * 0.3,
+                0.5 + Math.random() * 0.3,
+                0.7 + Math.random() * 0.3
+            ];
+            dimensionChart.update();
+
+            // Add new data point occasionally
+            if (Math.random() > 0.7) {
+                const sources = ['News API', 'Social API', 'Financial API'];
+                const source = sources[Math.floor(Math.random() * sources.length)];
+                const score = (0.8 + Math.random() * 0.2).toFixed(3);
+                
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700';
+                row.innerHTML = `
+                    <td class="px-3 py-2 text-sm">${source}</td>
+                    <td class="px-3 py-2 text-sm">
+                        <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                            ${score}
+                        </span>
+                    </td>
+                    <td class="px-3 py-2 text-sm text-gray-500">${new Date().toLocaleTimeString()}</td>
+                `;
+                
+                const table = document.getElementById('dataTable');
+                table.insertBefore(row, table.firstChild);
+                
+                if (table.children.length > 10) {
+                    table.removeChild(table.lastChild);
+                }
+            }
+        }
+
+        // Theme toggle
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            document.getElementById('themeIcon').textContent = 
+                document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
+        }
+
+        // Start updates
+        setInterval(updateDashboard, 2000);
+        updateDashboard();
+    </script>
+</body>
+</html>

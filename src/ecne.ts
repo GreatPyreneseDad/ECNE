@@ -114,10 +114,16 @@ export class ECNEDataRiver extends EventEmitter {
       retryDelay: config.collector?.retryDelay || 1000
     });
     
-    // Initialize filter
+    // Initialize filter with correct GCT parameters
     const filterConfig: FilterConfig = {
       sensitivity: 0.5,
-      weights: { psi: 0.25, rho: 0.25, q: 0.25, f: 0.25 },
+      gct_params: {
+        km: 0.3,              // Saturation constant
+        ki: 0.1,              // Inhibition constant  
+        coupling_strength: 0.15 // Coupling between components
+      },
+      contextWindow: 60,      // 1 hour context
+      patternMemory: 1000,    // Remember 1000 patterns
       enableAnomalyDetection: true,
       enablePrediction: true,
       enableOptimization: true,
@@ -431,6 +437,21 @@ export class ECNEDataRiver extends EventEmitter {
   updateFilterConfig(config: Partial<FilterConfig>): void {
     this.filter.updateConfig(config);
     this.emit('filter-config-updated', config);
+  }
+  
+  async getTopFilteredData(limit: number = 10): Promise<FilteredDataPoint[]> {
+    if (!this.storage) {
+      throw new Error('Storage not initialized');
+    }
+    
+    // Query for top coherence scores
+    const results = await this.storage.query({
+      orderBy: 'coherenceScore',
+      order: 'desc',
+      limit
+    });
+    
+    return results;
   }
   
   async exportData(format: 'json' | 'csv' = 'json'): Promise<string> {

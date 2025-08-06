@@ -3,7 +3,7 @@
  * Integrates ML-based pattern detection and optimization
  */
 
-import { CoherenceFilter, FilterConfig, DataPoint, FilteredDataPoint } from './coherence-filter';
+import { CoherenceFilter, FilterConfig, DataPoint, FilteredDataPoint, GCTParameters } from './coherence-filter';
 import { CoherenceAnomalyDetector, DimensionalAnomalyDetector } from '../analytics/anomaly-detector';
 import { CoherencePredictor, PatternClusterer } from '../analytics/pattern-predictor';
 import { WeightOptimizer, FeedbackData } from '../analytics/weight-optimizer';
