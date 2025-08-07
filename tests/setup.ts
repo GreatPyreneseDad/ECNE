@@ -5,34 +5,102 @@ import { TextEncoder, TextDecoder } from 'util';
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder as any;
 
-// Mock WebSocket for Node.js environment
-global.WebSocket = class MockWebSocket {
-  readyState: number = 0;
-  url: string;
+// Type definitions for WebSocket API
+type BinaryType = 'blob' | 'arraybuffer';
+type EventListener = (event: Event) => void;
+
+interface CloseEventInit {
+  bubbles?: boolean;
+  cancelable?: boolean;
+  code?: number;
+  reason?: string;
+  wasClean?: boolean;
+}
+
+class CloseEvent extends Event {
+  readonly code: number;
+  readonly reason: string;
+  readonly wasClean: boolean;
   
-  constructor(url: string) {
+  constructor(type: string, init?: CloseEventInit) {
+    super(type, init);
+    this.code = init?.code ?? 1000;
+    this.reason = init?.reason ?? '';
+    this.wasClean = init?.wasClean ?? true;
+  }
+}
+
+// Mock WebSocket for Node.js environment
+class MockWebSocket {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
+  
+  readyState: number = MockWebSocket.CONNECTING;
+  url: string;
+  protocol: string = '';
+  bufferedAmount: number = 0;
+  extensions: string = '';
+  binaryType: BinaryType = 'blob';
+  
+  constructor(url: string, protocols?: string | string[]) {
     this.url = url;
+    if (protocols) {
+      this.protocol = Array.isArray(protocols) ? protocols[0] : protocols;
+    }
     setTimeout(() => {
-      this.readyState = 1;
-      if (this.onopen) this.onopen({} as any);
+      this.readyState = MockWebSocket.OPEN;
+      if (this.onopen) {
+        const event = new Event('open');
+        this.onopen(event);
+      }
     }, 10);
   }
   
-  send(data: any): void {
-    // Mock send
+  send(_data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
+    if (this.readyState !== MockWebSocket.OPEN) {
+      throw new Error('WebSocket is not open');
+    }
+    // Mock send implementation
   }
   
-  close(): void {
-    this.readyState = 3;
-    if (this.onclose) this.onclose({ code: 1000, reason: 'Normal' } as any);
+  close(code?: number, reason?: string): void {
+    this.readyState = MockWebSocket.CLOSING;
+    setTimeout(() => {
+      this.readyState = MockWebSocket.CLOSED;
+      if (this.onclose) {
+        const event = new CloseEvent('close', {
+          code: code || 1000,
+          reason: reason || 'Normal closure',
+          wasClean: true
+        });
+        this.onclose(event);
+      }
+    }, 10);
+  }
+  
+  addEventListener(_type: string, _listener: EventListener): void {
+    // Mock addEventListener
+  }
+  
+  removeEventListener(_type: string, _listener: EventListener): void {
+    // Mock removeEventListener
+  }
+  
+  dispatchEvent(_event: Event): boolean {
+    return true;
   }
   
   // Event handlers
-  onopen?: (event: Event) => void;
-  onclose?: (event: CloseEvent) => void;
-  onmessage?: (event: MessageEvent) => void;
-  onerror?: (event: Event) => void;
-} as any;
+  onopen: ((event: Event) => void) | null = null;
+  onclose: ((event: CloseEvent) => void) | null = null;
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
+}
+
+// Assign to global with proper typing
+(global as any).WebSocket = MockWebSocket;
 
 // Global test configuration
 jest.setTimeout(30000);

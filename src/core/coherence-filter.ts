@@ -240,11 +240,27 @@ export class CoherenceFilter {
   private calculateGCTCoherence(dimensions: CoherenceDimensions): number {
     const { gct_params } = this.config;
     
+    // Validate inputs to prevent division by zero
+    if (gct_params.ki === 0) {
+      throw new Error('ki parameter cannot be zero');
+    }
+    
+    // Ensure q_raw is within valid range
+    if (dimensions.q_raw < 0) {
+      throw new Error('q_raw must be non-negative');
+    }
+    
+    // Calculate denominator first to check for zero
+    const denominator = gct_params.km + dimensions.q_raw + 
+      (dimensions.q_raw * dimensions.q_raw) / gct_params.ki;
+    
+    // Additional safety check
+    if (denominator === 0) {
+      throw new Error('Denominator in q_opt calculation cannot be zero');
+    }
+    
     // Optimize emotional charge with wisdom modulation
-    const q_opt = dimensions.q_raw / (
-      gct_params.km + dimensions.q_raw + 
-      (dimensions.q_raw * dimensions.q_raw) / gct_params.ki
-    );
+    const q_opt = dimensions.q_raw / denominator;
     
     // Update q_opt in dimensions
     dimensions.q_opt = q_opt;
@@ -262,7 +278,7 @@ export class CoherenceFilter {
   /**
    * Calculate coherence derivatives for temporal analysis
    */
-  private calculateCoherenceDerivatives(currentCoherence: number, timestamp: Date): {dc_dt: number, d2c_dt2: number} {
+  private calculateCoherenceDerivatives(_currentCoherence: number, _timestamp: Date): {dc_dt: number, d2c_dt2: number} {
     // Need at least 3 points for derivatives
     if (this.coherenceHistory.length < 3) {
       return { dc_dt: 0, d2c_dt2: 0 };
@@ -326,7 +342,7 @@ export class CoherenceFilter {
   /**
    * Calculate similarity between two data points
    */
-  private calculateSimilarity(a: DataPoint, b: DataPoint): number {
+  private _calculateSimilarity(a: DataPoint, b: DataPoint): number {
     // Simple similarity based on source and content structure
     let similarity = 0;
     
@@ -352,7 +368,7 @@ export class CoherenceFilter {
   /**
    * Get recent context within time window
    */
-  private getRecentContext(): DataPoint[] {
+  private _getRecentContext(): DataPoint[] {
     const cutoff = new Date(Date.now() - this.config.contextWindow * 60 * 1000);
     return this.contextBuffer.filter(dp => dp.timestamp > cutoff);
   }
@@ -393,7 +409,7 @@ export class CoherenceFilter {
     
     if (dimensions.psi > 0.7) reasons.push('High consistency with recent data');
     if (dimensions.rho > 0.7) reasons.push('Matches historical patterns');
-    if (dimensions.q > 0.7) reasons.push('Contains value-relevant content');
+    if (dimensions.q_opt > 0.7) reasons.push('Contains value-relevant content');
     if (dimensions.f > 0.7) reasons.push('Strong social relevance');
     
     return reasons;

@@ -30,6 +30,11 @@ export class WebSocketHandler extends EventEmitter {
   private eventHandlers: Map<string, Function[]> = new Map();
   private lastPingTime?: number;
   private connectionId?: string;
+  private circuitBreakerState: 'closed' | 'open' | 'half-open' = 'closed';
+  private circuitBreakerFailures: number = 0;
+  private circuitBreakerThreshold: number = 5;
+  private circuitBreakerResetTime: number = 60000; // 1 minute
+  private circuitBreakerResetTimer?: NodeJS.Timeout;
   
   constructor(private config: WebSocketConfig) {
     super();
@@ -47,14 +52,27 @@ export class WebSocketHandler extends EventEmitter {
       return;
     }
     
+    // Check circuit breaker
+    if (this.circuitBreakerState === 'open') {
+      console.warn('Circuit breaker is open, skipping connection attempt');
+      return;
+    }
+    
     this.isConnecting = true;
     
     try {
       this.ws = new WebSocket(this.config.url, this.config.protocols);
       this.setupEventHandlers();
+      
+      // If circuit breaker is half-open, reset on successful connection
+      if (this.circuitBreakerState === 'half-open') {
+        this.circuitBreakerState = 'closed';
+        this.circuitBreakerFailures = 0;
+      }
     } catch (error) {
       console.error('WebSocket connection error:', error);
       this.isConnecting = false;
+      this.handleConnectionFailure();
       this.scheduleReconnect();
     }
   }
@@ -191,6 +209,31 @@ export class WebSocketHandler extends EventEmitter {
     const delay = this.reconnectInterval * Math.pow(this.reconnectDecay, this.reconnectAttempts - 1);
     // Cap at 60 seconds
     return Math.min(delay, 60000);
+  }
+  
+  private handleConnectionFailure(): void {
+    this.circuitBreakerFailures++;
+    
+    if (this.circuitBreakerFailures >= this.circuitBreakerThreshold) {
+      console.error(`Circuit breaker opened after ${this.circuitBreakerFailures} failures`);
+      this.circuitBreakerState = 'open';
+      
+      // Schedule circuit breaker reset
+      if (this.circuitBreakerResetTimer) {
+        clearTimeout(this.circuitBreakerResetTimer);
+      }
+      
+      this.circuitBreakerResetTimer = setTimeout(() => {
+        console.log('Circuit breaker moving to half-open state');
+        this.circuitBreakerState = 'half-open';
+        this.connect(); // Try to reconnect
+      }, this.circuitBreakerResetTime);
+      
+      this.emit('circuit-breaker-open', {
+        failures: this.circuitBreakerFailures,
+        resetTime: this.circuitBreakerResetTime
+      });
+    }
   }
   
   private startHeartbeat(): void {

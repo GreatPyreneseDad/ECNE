@@ -45,6 +45,12 @@ export class DataRiverCollector extends EventEmitter {
   private queue: PQueue;
   private intervals: Map<string, NodeJS.Timeout> = new Map();
   private active: boolean = false;
+  private circuitBreakers: Map<string, {
+    failures: number;
+    state: 'closed' | 'open' | 'half-open';
+    lastFailure?: Date;
+    resetTime: number;
+  }> = new Map();
 
   constructor(private config: CollectorConfig) {
     super();

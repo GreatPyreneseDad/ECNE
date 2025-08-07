@@ -34,7 +34,9 @@ module.exports = {
     'ts-jest': {
       tsconfig: {
         esModuleInterop: true,
-        allowSyntheticDefaultImports: true
+        allowSyntheticDefaultImports: true,
+        noUnusedLocals: false,
+        noUnusedParameters: false
       }
     }
   }
